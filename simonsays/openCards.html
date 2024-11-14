@@ -1,0 +1,221 @@
+<html>
+
+<head>
+    <title>Simon Says Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.0.2/TimelineMax.min.js"
+        integrity="sha512-ExEP0u1SOp7gvzBoHWYmi6CEzdW2VHgfMeRZTetgX4HazJhC/UO1l83VGn4TLvgmIAxotN8uBcDE05a3sJglOA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.0.2/TweenMax.min.js"
+        integrity="sha512-O+atZ/gABlcFlpIoLQR04f72qHqZWKwTVsQZHqk/8VE2nrzDlnqhXbnXP7Gh/TyhpPT8tEUm5A580GG8AloHTA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.5.2/pixi.min.js"
+        integrity="sha512-nvzaLFu+uAwAY97f2bfy2jStxEYnmMThyraoEsaDy7LNw1us3/OoBKZm3Wne2GYBBQ9OhbZfs+0Dnxs6+sdZgA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+    <script>
+        (async () => {
+            const app = new PIXI.Application();
+            globalThis.__PIXI_APP__ = app;
+
+            await app.init({ background: '#000000', resizeTo: window });
+            document.body.appendChild(app.canvas);
+
+            let graphicColors = ['0xffffff', '0xffffff', '0xffffff', '0xffffff', '0xffffff', '0xffffff', '0xffffff', '0xffffff', '0xff5b33', '0xf9ff33', '0x3cff33', '0x3358ff'];
+            let positionsConfig = [{ x: 0, y: 0 }, { x: 130, y: 0 }, { x: 260, y: 0 }, { x: 390, y: 0 }, { x: 0, y: 150 }, { x: 130, y: 150 }, { x: 260, y: 150 }, { x: 390, y: 150 }];
+            let container = new PIXI.Container();
+            app.stage.addChild(container);
+
+            let boxes = [];
+            let series = [];
+            let playerSeries = [];
+            let playerLost = false;
+            let highScore = 0;
+            let possibleCardsTextures = ['clubsCard', 'diamondsCard', 'heartsCard', 'spadesCard', 'clubsCard', 'diamondsCard', 'heartsCard', 'spadesCard']
+            let sessionCards = [];
+            let previousCard = null;
+            let openedCards = [];
+            let minutes =0;
+            let seconds=0;
+            let timeInterval;
+
+
+            const texture = await PIXI.Assets.load('assets/cards_V1.json');
+
+            startGame = () => {
+                seconds = 0;
+                minutes = 0;
+                boxes.forEach((box,i)=>{
+                    box.open = false;
+                    box.eventMode = 'static';
+                    if(messageText.text === 'Game Over'){
+                        flipCard(i,false);
+                    }
+               })
+                sessionCards = generateRandomCards();
+                button.visible = false;
+                timeInterval = setInterval(startTimer,1000);
+            }
+
+            startTimer=()=>{
+                seconds++;
+                let secondsText;
+                let minutesText;
+                if(seconds > 59){
+                    minutes++;
+                    seconds = 0;
+                }
+                if(minutes <= 9){
+                    minutesText = '0' + minutes;
+                }else{
+                    minutesText = minutes;
+                }
+                if(seconds <= 9){
+                    secondsText = '0' + seconds;
+                }else{
+                    secondsText = seconds;
+                }
+                counterText.text = minutesText + ':' + secondsText;
+            }
+
+            generateRandomCards = () => {
+                for (let i = possibleCardsTextures.length - 1; i > 0; i--) {
+                    // Generate a random index between 0 and i
+                    const randomIndex = Math.floor(Math.random() * (i + 1));
+
+                    // Swap elements at indices i and randomIndex
+                    [possibleCardsTextures[i], possibleCardsTextures[randomIndex]] = [possibleCardsTextures[randomIndex], possibleCardsTextures[i]];
+                }
+                return possibleCardsTextures;
+            }
+
+            for (let i = 0; i < 8; i++) {
+                const card = PIXI.Sprite.from('Front-card');
+                card.x = positionsConfig[i].x;
+                card.y = positionsConfig[i].y;
+                card.anchor.set(0.5);
+                card.cursor = 'pointer';
+                card.addListener('pointerdown', (event) => takeInput(event, i));
+                container.addChild(card);
+                boxes.push(card);
+            }
+
+            let button = new PIXI.Graphics();
+            button.roundRect(150, 300, 100, 40, 20);
+            button.fill('0xf73434');
+            button.cursor = 'pointer';
+            button.eventMode = 'static';
+            button.addListener('pointerdown', () => startGame());
+            container.addChild(button);
+
+
+            // Text elements
+            let btnText = new PIXI.Text('Start Game', { fontSize: '18', fill: '0xffffff' });
+            btnText.x = 155;
+            btnText.y = 300 + btnText.height / 2;
+            button.addChild(btnText);
+
+            let messageText = new PIXI.Text('', { fontSize: '18', fill: '0xffffff' });
+            messageText.x = 75;
+            messageText.y = 350 + messageText.height / 2;
+            container.addChild(messageText);
+
+            let counterText = new PIXI.Text('', { fontSize: '18', fill: '0xffffff' });
+            counterText.x = 0;
+            counterText.y = 250 + counterText.height / 2;
+            container.addChild(counterText);
+
+            // Resize adjustment
+            onresize();
+
+            
+            // Check player's input
+            function takeInput(event, i) {
+                disableBoxes();
+                flipCard(i, true); 
+            }
+
+            flipCard = (index, open) => {
+                let timeLine = new TimelineMax({
+                    onComplete: () => {
+                        if (open) {
+                            validateInput(index);
+                        }
+                        enableBoxes();
+                    }
+                });
+                timeLine.to(boxes[index].scale, 0.3, {
+                    x: 0, onComplete: () => {
+                        boxes[index].texture = open ? PIXI.Texture.from(sessionCards[index]) : PIXI.Texture.from('Front-card');
+                    }
+                })
+                .to(boxes[index].scale, 0.2, { x: 1 });
+            }
+
+
+            function validateInput(i) {
+                if (previousCard !== null && boxes[i].texture.label === boxes[previousCard].texture.label) {
+                    setTimeout(() => {
+                        boxes[i].open = boxes[previousCard].open = true;
+                        boxes[i].eventMode = boxes[previousCard].eventMode = null;
+                        openedCards.push(previousCard);
+                        openedCards.push(i);
+                        previousCard = null;
+                        if(openedCards.length === 8){
+                            resetGame();
+                        }
+                    }, 0);
+                } else if (previousCard !== null && boxes[i].texture.label !== boxes[previousCard].texture.label) {
+                    setTimeout(() => {
+                        flipCard(previousCard, false);
+                        flipCard(i, false);
+                        previousCard = null;
+                    }, 500);
+
+                }
+                if (previousCard === null) {
+                    previousCard = i;
+                    boxes[previousCard].eventMode = null;
+                }
+
+            }
+
+            // Reset the game if the player loses
+            function resetGame() {
+                button.visible = true;
+                messageText.text = 'Game Over';
+                clearInterval(timeInterval);
+                openedCards = [];
+            }
+
+            // Enable boxes for player input
+            function enableBoxes() {
+                boxes.forEach((box) => {
+                    if(!box.open){
+                        box.eventMode = 'static';
+                    }
+                });
+            }
+
+            // Disable boxes after the sequence is shown
+            function disableBoxes() {
+                boxes.forEach((box) => {
+                    box.eventMode = null;
+                });
+            }
+
+            // Resize container position
+            function onresize() {
+                container.x = window.innerWidth / 2 - container.width / 2;
+                container.y = window.innerHeight / 2 - container.height / 4;
+            }
+
+            // Window resize listener
+            window.onresize = onresize;
+
+        })();
+    </script>
+</body>
+
+</html>
